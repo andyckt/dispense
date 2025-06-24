@@ -2,15 +2,15 @@
 
 import type React from "react"
 
-import { useState, useRef, useCallback, useEffect } from "react"
-import { Camera, Upload, X, RefreshCw, Check, Tablet, AlertCircle } from "lucide-react"
+import { useState, useRef, useCallback } from "react"
+import { Upload, RefreshCw, Check, Tablet, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { motion, AnimatePresence } from "framer-motion"
 
-type AnalysisState = "idle" | "capturing" | "processing" | "results"
+type AnalysisState = "idle" | "processing" | "results"
 
 interface TabletAnalysisResult {
   count: string
@@ -23,16 +23,7 @@ export default function TabletAnalysisDemo() {
   const [result, setResult] = useState<TabletAnalysisResult | null>(null)
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const [isCameraReady, setIsCameraReady] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-
-  // Check if camera is supported
-  const isCameraSupported = typeof navigator !== 'undefined' && 
-                           navigator.mediaDevices && 
-                           navigator.mediaDevices.getUserMedia;
 
   // Define startProcessing function first to avoid reference errors
   const startProcessing = useCallback(async (dataUrl: string, file?: File) => {
@@ -102,122 +93,6 @@ export default function TabletAnalysisDemo() {
     }
   }, [])
 
-  const stopCamera = useCallback(() => {
-    console.log("Stopping camera...");
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        console.log("Stopping track:", track);
-        track.stop();
-      });
-      streamRef.current = null;
-    }
-    setIsCameraReady(false);
-  }, []);
-
-  const captureImage = useCallback(() => {
-    if (!videoRef.current) {
-      console.error("Video reference not available for capture");
-      return;
-    }
-    
-    if (videoRef.current.readyState !== 4) {
-      console.warn("Video not fully ready for capture, readyState:", videoRef.current.readyState);
-    }
-    
-    try {
-      console.log("Capturing image from video...");
-      const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-      
-      console.log("Canvas dimensions:", canvas.width, "x", canvas.height);
-      
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-        console.log("Image captured successfully");
-        setImageSrc(dataUrl);
-        stopCamera();
-        startProcessing(dataUrl);
-      } else {
-        console.error("Could not get canvas context");
-      }
-    } catch (err) {
-      console.error("Error capturing image:", err);
-      setCameraError("Failed to capture image. Please try again.");
-    }
-  }, [stopCamera, startProcessing]);
-
-  const startCamera = useCallback(async () => {
-    // Reset any previous camera errors
-    setCameraError(null);
-    setIsCameraReady(false);
-    
-    if (!isCameraSupported) {
-      setCameraError("Camera access is not supported in your browser.");
-      return;
-    }
-    
-    try {
-      console.log("Requesting camera access...");
-      const constraints = { 
-        video: { 
-          facingMode: "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      };
-      
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log("Camera access granted:", stream);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setAnalysisState("capturing");
-        
-        // Log video element state
-        console.log("Video element:", videoRef.current);
-        console.log("Video ready state:", videoRef.current.readyState);
-      } else {
-        console.error("Video reference is not available");
-        setCameraError("Could not initialize camera. Please try again.");
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      setCameraError(
-        err instanceof Error 
-          ? `Camera error: ${err.message}` 
-          : "Unable to access camera. Please ensure you've granted camera permissions."
-      );
-    }
-  }, [isCameraSupported]);
-
-  // Handle video element events
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) return;
-    
-    const handleCanPlay = () => {
-      console.log("Video can play now");
-      setIsCameraReady(true);
-    };
-    
-    const handleError = (e: Event) => {
-      console.error("Video element error:", e);
-      setCameraError("Error initializing video stream");
-    };
-    
-    videoElement.addEventListener('canplay', handleCanPlay);
-    videoElement.addEventListener('error', handleError);
-    
-    return () => {
-      videoElement.removeEventListener('canplay', handleCanPlay);
-      videoElement.removeEventListener('error', handleError);
-    };
-  }, [analysisState]);
-
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
@@ -237,14 +112,13 @@ export default function TabletAnalysisDemo() {
     setResult(null)
     setImageSrc(null)
     setError(null)
-    setCameraError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
   }, [])
 
   return (
-    <Card className="w-full max-w-md mx-auto overflow-hidden">
+    <Card className="w-full max-w-md mx-auto overflow-hidden shadow-lg rounded-xl border border-gray-100">
       <CardHeader className="bg-blue-600 text-white">
         <CardTitle className="flex items-center justify-center gap-2">
           <Tablet className="h-6 w-6" />
@@ -261,25 +135,24 @@ export default function TabletAnalysisDemo() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="text-center p-6"
+                className="text-center p-8"
               >
-                <div className="mb-6 text-gray-500">Take a photo or upload an image of tablets to analyze</div>
-                <div className="flex gap-4 justify-center">
-                  <Button 
-                    onClick={startCamera} 
-                    className="flex items-center gap-2"
-                    disabled={!isCameraSupported}
-                  >
-                    <Camera className="h-4 w-4" />
-                    <span>Camera</span>
-                  </Button>
+                <div className="mb-8">
+                  <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Upload className="h-10 w-10 text-blue-600" />
+                  </div>
+                  <p className="text-gray-600 text-lg">Upload an image of tablets to analyze</p>
+                </div>
+                
+                <div className="flex justify-center">
                   <Button
-                    variant="outline"
+                    variant="default"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 px-6 py-5"
+                    size="lg"
                   >
-                    <Upload className="h-4 w-4" />
-                    <span>Upload</span>
+                    <Upload className="h-5 w-5" />
+                    <span>Upload Image</span>
                   </Button>
                   <input
                     type="file"
@@ -289,73 +162,9 @@ export default function TabletAnalysisDemo() {
                     className="hidden"
                   />
                 </div>
-                {!isCameraSupported && (
-                  <div className="mt-4 text-sm text-amber-600">
-                    <AlertCircle className="h-4 w-4 inline mr-1" />
-                    Camera not supported in this browser. Please use the upload option.
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {analysisState === "capturing" && (
-              <motion.div
-                key="capturing"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="w-full h-full relative"
-              >
-                <video 
-                  ref={videoRef} 
-                  autoPlay 
-                  playsInline 
-                  muted
-                  onCanPlay={() => setIsCameraReady(true)}
-                  className="w-full h-full object-cover" 
-                />
-                
-                {cameraError && (
-                  <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white p-6">
-                    <AlertCircle className="h-10 w-10 text-red-500 mb-4" />
-                    <h3 className="text-xl font-semibold mb-4">Camera Error</h3>
-                    <p className="text-center mb-6">{cameraError}</p>
-                    <Button
-                      onClick={resetDemo}
-                      variant="outline"
-                      className="bg-white text-gray-900"
-                    >
-                      Go Back
-                    </Button>
-                  </div>
-                )}
-                
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
-                  <Button
-                    onClick={captureImage}
-                    className="rounded-full w-14 h-14 p-0 flex items-center justify-center"
-                    disabled={!isCameraReady}
-                  >
-                    <Camera className="h-6 w-6" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      stopCamera()
-                      resetDemo()
-                    }}
-                    className="rounded-full w-10 h-10 p-0 flex items-center justify-center bg-white"
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
-                
-                {!cameraError && !isCameraReady && (
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
-                    <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
-                    <p className="text-white">Initializing camera...</p>
-                  </div>
-                )}
+                <p className="text-sm text-gray-500 mt-6">
+                  For best results, ensure tablets are clearly visible and well-lit
+                </p>
               </motion.div>
             )}
 
@@ -367,14 +176,19 @@ export default function TabletAnalysisDemo() {
                 exit={{ opacity: 0 }}
                 className="w-full h-full relative"
               >
-                <img src={imageSrc || ""} alt="Captured tablet" className="w-full h-full object-cover" />
+                <img src={imageSrc || ""} alt="Tablet image" className="w-full h-full object-cover" />
 
                 {analysisState === "processing" && (
                   <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white p-6">
                     <RefreshCw className="h-10 w-10 animate-spin mb-4" />
                     <h3 className="text-xl font-semibold mb-2">Analyzing Tablets</h3>
                     <div className="w-full max-w-xs mb-2">
-                      <Progress value={progress} className="h-2" />
+                      <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-500 transition-all duration-300" 
+                          style={{ width: `${progress}%` }} 
+                        />
+                      </div>
                     </div>
                     <div className="text-sm opacity-80">
                       {progress < 30 && "Detecting tablets..."}
@@ -397,11 +211,17 @@ export default function TabletAnalysisDemo() {
                 <div className="p-6">
                   {error ? (
                     <div className="text-center mb-4">
+                      <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <AlertCircle className="h-8 w-8 text-red-600" />
+                      </div>
                       <h3 className="text-xl font-bold text-red-600">Analysis Error</h3>
                       <p className="text-gray-600 mt-2">{error}</p>
                     </div>
                   ) : result ? (
                     <div className="text-center mb-4">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Check className="h-8 w-8 text-green-600" />
+                      </div>
                       <h3 className="text-xl font-bold text-blue-600">Analysis Complete</h3>
                       <div className="mt-6 mb-6 bg-blue-50 rounded-lg p-8 flex flex-col items-center">
                         <div className="text-4xl font-bold text-blue-700 mb-2">{result.count}</div>
