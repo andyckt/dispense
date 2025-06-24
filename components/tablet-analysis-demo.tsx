@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState, useRef, useCallback } from "react"
-import { Camera, Upload, X, RefreshCw, Check, Tablet } from "lucide-react"
+import { useState, useRef, useCallback, useEffect } from "react"
+import { Camera, Upload, X, RefreshCw, Check, Tablet, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -23,60 +23,18 @@ export default function TabletAnalysisDemo() {
   const [result, setResult] = useState<TabletAnalysisResult | null>(null)
   const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isCameraReady, setIsCameraReady] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
-      }
-      setAnalysisState("capturing")
-    } catch (error) {
-      console.error("Error accessing camera:", error)
-      alert("Unable to access camera. Please ensure you've granted camera permissions.")
-    }
-  }, [])
+  // Check if camera is supported
+  const isCameraSupported = typeof navigator !== 'undefined' && 
+                           navigator.mediaDevices && 
+                           navigator.mediaDevices.getUserMedia;
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-  }, [])
-
-  const captureImage = useCallback(() => {
-    if (videoRef.current) {
-      const canvas = document.createElement("canvas")
-      canvas.width = videoRef.current.videoWidth
-      canvas.height = videoRef.current.videoHeight
-      const ctx = canvas.getContext("2d")
-      if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
-        const dataUrl = canvas.toDataURL("image/jpeg")
-        setImageSrc(dataUrl)
-        stopCamera()
-        startProcessing(dataUrl)
-      }
-    }
-  }, [stopCamera])
-
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string
-        setImageSrc(dataUrl)
-        startProcessing(dataUrl, file)
-      }
-      reader.readAsDataURL(file)
-    }
-  }, [])
-
+  // Define startProcessing function first to avoid reference errors
   const startProcessing = useCallback(async (dataUrl: string, file?: File) => {
     setAnalysisState("processing")
     setProgress(0)
@@ -144,12 +102,142 @@ export default function TabletAnalysisDemo() {
     }
   }, [])
 
+  const stopCamera = useCallback(() => {
+    console.log("Stopping camera...");
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        console.log("Stopping track:", track);
+        track.stop();
+      });
+      streamRef.current = null;
+    }
+    setIsCameraReady(false);
+  }, []);
+
+  const captureImage = useCallback(() => {
+    if (!videoRef.current) {
+      console.error("Video reference not available for capture");
+      return;
+    }
+    
+    if (videoRef.current.readyState !== 4) {
+      console.warn("Video not fully ready for capture, readyState:", videoRef.current.readyState);
+    }
+    
+    try {
+      console.log("Capturing image from video...");
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth || 640;
+      canvas.height = videoRef.current.videoHeight || 480;
+      
+      console.log("Canvas dimensions:", canvas.width, "x", canvas.height);
+      
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        console.log("Image captured successfully");
+        setImageSrc(dataUrl);
+        stopCamera();
+        startProcessing(dataUrl);
+      } else {
+        console.error("Could not get canvas context");
+      }
+    } catch (err) {
+      console.error("Error capturing image:", err);
+      setCameraError("Failed to capture image. Please try again.");
+    }
+  }, [stopCamera, startProcessing]);
+
+  const startCamera = useCallback(async () => {
+    // Reset any previous camera errors
+    setCameraError(null);
+    setIsCameraReady(false);
+    
+    if (!isCameraSupported) {
+      setCameraError("Camera access is not supported in your browser.");
+      return;
+    }
+    
+    try {
+      console.log("Requesting camera access...");
+      const constraints = { 
+        video: { 
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("Camera access granted:", stream);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setAnalysisState("capturing");
+        
+        // Log video element state
+        console.log("Video element:", videoRef.current);
+        console.log("Video ready state:", videoRef.current.readyState);
+      } else {
+        console.error("Video reference is not available");
+        setCameraError("Could not initialize camera. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      setCameraError(
+        err instanceof Error 
+          ? `Camera error: ${err.message}` 
+          : "Unable to access camera. Please ensure you've granted camera permissions."
+      );
+    }
+  }, [isCameraSupported]);
+
+  // Handle video element events
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+    
+    const handleCanPlay = () => {
+      console.log("Video can play now");
+      setIsCameraReady(true);
+    };
+    
+    const handleError = (e: Event) => {
+      console.error("Video element error:", e);
+      setCameraError("Error initializing video stream");
+    };
+    
+    videoElement.addEventListener('canplay', handleCanPlay);
+    videoElement.addEventListener('error', handleError);
+    
+    return () => {
+      videoElement.removeEventListener('canplay', handleCanPlay);
+      videoElement.removeEventListener('error', handleError);
+    };
+  }, [analysisState]);
+
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string
+        setImageSrc(dataUrl)
+        startProcessing(dataUrl, file)
+      }
+      reader.readAsDataURL(file)
+    }
+  }, [startProcessing])
+
   const resetDemo = useCallback(() => {
     setAnalysisState("idle")
     setProgress(0)
     setResult(null)
     setImageSrc(null)
     setError(null)
+    setCameraError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -177,7 +265,11 @@ export default function TabletAnalysisDemo() {
               >
                 <div className="mb-6 text-gray-500">Take a photo or upload an image of tablets to analyze</div>
                 <div className="flex gap-4 justify-center">
-                  <Button onClick={startCamera} className="flex items-center gap-2">
+                  <Button 
+                    onClick={startCamera} 
+                    className="flex items-center gap-2"
+                    disabled={!isCameraSupported}
+                  >
                     <Camera className="h-4 w-4" />
                     <span>Camera</span>
                   </Button>
@@ -197,6 +289,12 @@ export default function TabletAnalysisDemo() {
                     className="hidden"
                   />
                 </div>
+                {!isCameraSupported && (
+                  <div className="mt-4 text-sm text-amber-600">
+                    <AlertCircle className="h-4 w-4 inline mr-1" />
+                    Camera not supported in this browser. Please use the upload option.
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -208,11 +306,35 @@ export default function TabletAnalysisDemo() {
                 exit={{ opacity: 0 }}
                 className="w-full h-full relative"
               >
-                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted
+                  onCanPlay={() => setIsCameraReady(true)}
+                  className="w-full h-full object-cover" 
+                />
+                
+                {cameraError && (
+                  <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white p-6">
+                    <AlertCircle className="h-10 w-10 text-red-500 mb-4" />
+                    <h3 className="text-xl font-semibold mb-4">Camera Error</h3>
+                    <p className="text-center mb-6">{cameraError}</p>
+                    <Button
+                      onClick={resetDemo}
+                      variant="outline"
+                      className="bg-white text-gray-900"
+                    >
+                      Go Back
+                    </Button>
+                  </div>
+                )}
+                
                 <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
                   <Button
                     onClick={captureImage}
                     className="rounded-full w-14 h-14 p-0 flex items-center justify-center"
+                    disabled={!isCameraReady}
                   >
                     <Camera className="h-6 w-6" />
                   </Button>
@@ -227,6 +349,13 @@ export default function TabletAnalysisDemo() {
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
+                
+                {!cameraError && !isCameraReady && (
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
+                    <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
+                    <p className="text-white">Initializing camera...</p>
+                  </div>
+                )}
               </motion.div>
             )}
 
