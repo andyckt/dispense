@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import HalftoneWaves from "./halftone-waves"
 import { ArrowRight, Pill } from "lucide-react"
 import { motion } from "framer-motion"
+import TabletDemoModal from "./tablet-demo-modal"
 
 export default function HeroSection() {
   return (
@@ -21,14 +22,8 @@ export default function HeroSection() {
             <p className="text-xl md:text-2xl mb-8 text-gray-700">
               Revolutionizing pharmacy operations with instant tablet recognition through image detection
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                Request Demo
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button size="lg" variant="outline">
-                Learn More
-              </Button>
+            <div className="flex justify-center">
+              <TabletDemoModal buttonText="Try Now" />
             </div>
           </motion.div>
         </div>

@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button"
 import { Users } from "lucide-react"
 
 export default function AboutSection() {
-  return (
+  return null; // Section commented out
+  /*
     <section className="py-20 bg-white">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
@@ -47,5 +48,5 @@ export default function AboutSection() {
         </div>
       </div>
     </section>
-  )
+  */
 }

@@ -5,7 +5,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Mail, Phone, MapPin } from "lucide-react"
 
 export default function ContactSection() {
-  return (
+  return null; // Section commented out
+  /*
     <section className="py-20 bg-gray-50">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
@@ -106,5 +107,5 @@ export default function ContactSection() {
         </div>
       </div>
     </section>
-  )
+  */
 }
