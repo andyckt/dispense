@@ -7,7 +7,7 @@ export default function DemoSection() {
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Try Our Technology</h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Experience how our AI can identify and analyze tablets in real-time
+            Experience how our AI can count and analyze tablets in real-time
           </p>
         </div>
 
@@ -15,7 +15,7 @@ export default function DemoSection() {
           <div className="lg:w-1/2">
             <h3 className="text-2xl font-semibold mb-4">Interactive Demo</h3>
             <p className="text-gray-600 mb-4">
-              This demo showcases our AI's ability to analyze tablets based on their physical characteristics. In a
+              This demo showcases our AI's ability to count tablets using computer vision. In a
               real-world scenario, our system would:
             </p>
             <ul className="space-y-2 mb-6">
@@ -25,15 +25,15 @@ export default function DemoSection() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-600 font-bold">•</span>
-                <span>Identify color, shape, size, and markings with precision</span>
+                <span>Work with various tablet shapes, colors, and sizes</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-600 font-bold">•</span>
-                <span>Match against a database of thousands of medications</span>
+                <span>Process images in seconds</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-600 font-bold">•</span>
-                <span>Provide detailed information about the medication</span>
+                <span>Help reduce counting errors in pharmacy operations</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-blue-600 font-bold">•</span>
@@ -41,8 +41,7 @@ export default function DemoSection() {
               </li>
             </ul>
             <p className="text-gray-600">
-              Try the demo by taking a photo or uploading an image. For this demonstration, we'll simulate the analysis
-              process and show you sample results.
+              Try the demo by taking a photo or uploading an image of tablets. Our AI will count the tablets and display the results.
             </p>
           </div>
 

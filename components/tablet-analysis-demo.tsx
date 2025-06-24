@@ -12,42 +12,17 @@ import { motion, AnimatePresence } from "framer-motion"
 
 type AnalysisState = "idle" | "capturing" | "processing" | "results"
 
-interface TabletAnalysis {
-  name: string
-  quantity: number
-  color: string
-  shape: string
-  size: string
-  markings: string
-  confidence: number
-  possibleMatches: Array<{
-    name: string
-    probability: number
-  }>
-  additionalInfo: string
-}
-
-const mockAnalysisResults: TabletAnalysis = {
-  name: "Lisinopril 10mg",
-  quantity: 8,
-  color: "Pink",
-  shape: "Round",
-  size: "8mm",
-  markings: "L10",
-  confidence: 96.7,
-  possibleMatches: [
-    { name: "Lisinopril 10mg", probability: 96.7 },
-    { name: "Enalapril 10mg", probability: 2.1 },
-    { name: "Amlodipine 5mg", probability: 1.2 },
-  ],
-  additionalInfo: "Common ACE inhibitor used to treat high blood pressure and heart failure.",
+interface TabletAnalysisResult {
+  count: string
+  error?: string
 }
 
 export default function TabletAnalysisDemo() {
   const [analysisState, setAnalysisState] = useState<AnalysisState>("idle")
   const [progress, setProgress] = useState(0)
-  const [results, setResults] = useState<TabletAnalysis | null>(null)
+  const [result, setResult] = useState<TabletAnalysisResult | null>(null)
   const [imageSrc, setImageSrc] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -84,7 +59,7 @@ export default function TabletAnalysisDemo() {
         const dataUrl = canvas.toDataURL("image/jpeg")
         setImageSrc(dataUrl)
         stopCamera()
-        startProcessing()
+        startProcessing(dataUrl)
       }
     }
   }, [stopCamera])
@@ -94,39 +69,87 @@ export default function TabletAnalysisDemo() {
     if (file) {
       const reader = new FileReader()
       reader.onload = (e) => {
-        setImageSrc(e.target?.result as string)
-        startProcessing()
+        const dataUrl = e.target?.result as string
+        setImageSrc(dataUrl)
+        startProcessing(dataUrl, file)
       }
       reader.readAsDataURL(file)
     }
   }, [])
 
-  const startProcessing = useCallback(() => {
+  const startProcessing = useCallback(async (dataUrl: string, file?: File) => {
     setAnalysisState("processing")
     setProgress(0)
-
-    // Simulate processing with progress updates
-    const interval = setInterval(() => {
+    setError(null)
+    
+    // Start progress animation
+    const progressInterval = setInterval(() => {
       setProgress((prev) => {
-        const newProgress = prev + Math.random() * 15
-        if (newProgress >= 100) {
-          clearInterval(interval)
-          setTimeout(() => {
-            setResults(mockAnalysisResults)
-            setAnalysisState("results")
-          }, 500)
-          return 100
+        if (prev >= 95) {
+          clearInterval(progressInterval)
+          return 95
         }
-        return newProgress
+        return prev + Math.random() * 10
       })
     }, 300)
+    
+    try {
+      // Create FormData and append the image
+      const formData = new FormData()
+      
+      // If file is provided, use it directly
+      if (file) {
+        formData.append('image', file)
+      } 
+      // Otherwise convert dataUrl to a file
+      else if (dataUrl) {
+        // Convert data URL to Blob
+        const response = await fetch(dataUrl)
+        const blob = await response.blob()
+        formData.append('image', blob, 'image.jpg')
+      }
+      
+      // Call our API endpoint
+      const response = await fetch('/api/count-tablets', {
+        method: 'POST',
+        body: formData
+      })
+      
+      const data = await response.json()
+      
+      clearInterval(progressInterval)
+      setProgress(100)
+      
+      if (data.error) {
+        setError(data.error)
+        setResult(null)
+      } else {
+        setResult(data)
+        setError(null)
+      }
+      
+      setTimeout(() => {
+        setAnalysisState("results")
+      }, 500)
+      
+    } catch (err) {
+      clearInterval(progressInterval)
+      setProgress(100)
+      setError(`Error: ${err instanceof Error ? err.message : 'Unknown error occurred'}`);
+      setResult(null)
+      
+      setTimeout(() => {
+        setAnalysisState("results")
+      }, 500)
+    }
   }, [])
 
   const resetDemo = useCallback(() => {
     setAnalysisState("idle")
     setProgress(0)
-    setResults(null)
+    setResult(null)
     setImageSrc(null)
+    setError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -227,7 +250,7 @@ export default function TabletAnalysisDemo() {
                     <div className="text-sm opacity-80">
                       {progress < 30 && "Detecting tablets..."}
                       {progress >= 30 && progress < 60 && "Analyzing physical properties..."}
-                      {progress >= 60 && progress < 90 && "Matching database records..."}
+                      {progress >= 60 && progress < 90 && "Counting tablets..."}
                       {progress >= 90 && "Finalizing results..."}
                     </div>
                   </div>
@@ -235,7 +258,7 @@ export default function TabletAnalysisDemo() {
               </motion.div>
             )}
 
-            {analysisState === "results" && results && (
+            {analysisState === "results" && imageSrc && (
               <motion.div
                 key="results"
                 initial={{ opacity: 0, y: 20 }}
@@ -243,56 +266,38 @@ export default function TabletAnalysisDemo() {
                 className="absolute inset-0 bg-white/90 overflow-y-auto"
               >
                 <div className="p-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-blue-600">{results.name}</h3>
-                    <Badge className="bg-green-500">
-                      <Check className="h-3 w-3 mr-1" />
-                      {results.confidence.toFixed(1)}% Match
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <div className="text-sm text-gray-500">Quantity</div>
-                      <div className="font-semibold">{results.quantity} tablets</div>
+                  {error ? (
+                    <div className="text-center mb-4">
+                      <h3 className="text-xl font-bold text-red-600">Analysis Error</h3>
+                      <p className="text-gray-600 mt-2">{error}</p>
                     </div>
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <div className="text-sm text-gray-500">Color</div>
-                      <div className="font-semibold">{results.color}</div>
+                  ) : result ? (
+                    <div className="text-center mb-4">
+                      <h3 className="text-xl font-bold text-blue-600">Analysis Complete</h3>
+                      <div className="mt-6 mb-6 bg-blue-50 rounded-lg p-8 flex flex-col items-center">
+                        <div className="text-4xl font-bold text-blue-700 mb-2">{result.count}</div>
+                        <div className="text-gray-600">Tablets Detected</div>
+                      </div>
                     </div>
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <div className="text-sm text-gray-500">Shape</div>
-                      <div className="font-semibold">{results.shape}</div>
+                  ) : (
+                    <div className="text-center mb-4">
+                      <h3 className="text-xl font-bold text-blue-600">Analysis Complete</h3>
+                      <p className="text-gray-600 mt-2">
+                        No results available.
+                      </p>
                     </div>
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <div className="text-sm text-gray-500">Size</div>
-                      <div className="font-semibold">{results.size}</div>
-                    </div>
-                    <div className="bg-gray-100 p-3 rounded-lg col-span-2">
-                      <div className="text-sm text-gray-500">Markings</div>
-                      <div className="font-semibold">{results.markings}</div>
-                    </div>
-                  </div>
-
-                  <div className="mb-6">
-                    <h4 className="font-semibold mb-2">Possible Matches</h4>
-                    <div className="space-y-2">
-                      {results.possibleMatches.map((match, index) => (
-                        <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                          <span>{match.name}</span>
-                          <Badge variant={index === 0 ? "default" : "outline"}>{match.probability.toFixed(1)}%</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
+                  )}
+                  
                   <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                    <h4 className="font-semibold mb-1">Additional Information</h4>
-                    <p className="text-sm">{results.additionalInfo}</p>
+                    <h4 className="font-semibold mb-1">How It Works</h4>
+                    <p className="text-sm">
+                      Our system uses AI vision technology to analyze the image and count the number of tablets.
+                      This helps pharmacists quickly verify medication counts.
+                    </p>
                   </div>
 
                   <div className="text-xs text-gray-500 italic text-center mb-4">
-                    This is a demonstration. In a real application, results would be based on actual AI analysis.
+                    For demonstration purposes. Results may vary based on image quality and lighting conditions.
                   </div>
                 </div>
               </motion.div>
@@ -310,7 +315,7 @@ export default function TabletAnalysisDemo() {
           <div className="text-sm text-gray-500 text-center w-full">
             {analysisState === "processing"
               ? "Please wait while we analyze the image..."
-              : "This demo simulates our AI tablet identification technology"}
+              : "This demo uses AI to count tablets in your images"}
           </div>
         )}
       </CardFooter>
